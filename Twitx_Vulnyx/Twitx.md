@@ -88,5 +88,42 @@ Si accedemos nos muestra un panel de login donde podemos acceder con el usuario 
 
 ![urlParams](https://github.com/user-attachments/assets/8fd5889f-1443-4fcb-8dba-48212ab2f9af)
 
+Si probamos a cambiar estos parámetros con los que hemos obtenido por las dirección obtenidas en la segunda captura de gobuster vemos que no muestra nada pero tampoco falla la petición por lo que en realidad si hace una petición solo que no encuentra el recurso. En este punto yo probaría un tipo de ataque (Unrestricted file upload) dónde intento subir un archivo malicioso como foto de perfil y a continuación intento visualizar ese archivo haciendo esa llamada a través de los parámetros de la url.
 
-  
+Una primera prueba podría ser con el siguiente archivo:
+
+![archivoMalicioso1](https://github.com/user-attachments/assets/17ddd481-6bf5-4217-97d0-f9fea4f880cd)
+
+Lo intentamos subir como foto de perfil...
+
+![loginMalicioso](https://github.com/user-attachments/assets/55b1cf8b-afc9-48fa-80c7-d90a95263cb0)
+
+![loginMaliciosoExitoso1](https://github.com/user-attachments/assets/dc621da9-b3a2-4503-9a94-9823962a6fd5)
+
+Y funciona!!! Bien, ahora vamos a inciar sesión de la forma explicada anteriormente y vamos a probar en la url.
+
+![pruebaUrl1](https://github.com/user-attachments/assets/3e07f53b-32cd-442a-b5b0-b031f95cd53e)
+
+Vemos que no muestra nada, además estuve probando en el resto de directorios pero sin éxito. Entonces decidí mirar en el código html como se estaba mostrando la foto, ya que no se veia en la ventana de perfil de usuario, y descubrí que el nombre de la foto estaba encodeada por eso no encontrabamos la dirección exacta.
+
+![fotoEncodeada](https://github.com/user-attachments/assets/7d74c6a0-eb26-4d94-87c9-f6ab8ac45f7c)
+
+Si probamos con la dirección: `http://twitx.nyx/private.php?folder=upload&file=<foto-encodeada-html>`
+
+![fotoPayloadExito](https://github.com/user-attachments/assets/8074b700-9f28-45f1-8a0b-cf71261ea159)
+
+La foto se ha renderizado como código html!!! Eso significa que podemos ejecutar comandos y probablemente obtener una reverse-shell. Voy a realizar el mismo procedimiento pero esta vez el archivo será una reverse shell muy conocida, el repositorio es el sigueinte:
+
+- https://github.com/pentestmonkey/php-reverse-shell
+- También podeis usar recursos online como [RevShells](https://www.revshells.com/)
+
+Realizando los mismos pasos obtenemos una reverse-shell como el usuario www-data.
+
+![revershell1](https://github.com/user-attachments/assets/d876ca86-61e3-4292-95da-affeb0a85009)
+
+Ahora pasaremos a la fase de escalada de privilegios.
+
+## Escalada de privilegios
+
+
+
