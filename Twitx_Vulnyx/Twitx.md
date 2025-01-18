@@ -125,5 +125,60 @@ Ahora pasaremos a la fase de escalada de privilegios.
 
 ## Escalada de privilegios
 
+Perfecto, estando dentro de la máquina víctima vamos a proceder a buscar alguna forma de escalar privilegios ya sea consiguiendo ejecutar comandos como superusuario o incluso consiguiendo acceso a la máquina como el propio superusuario. Para empezar vamos a inspeccionar las carpetas del servicio web por si encontramos algo de información útil como credenciales.
 
+En efecto, dentro de la ruta `/var/www/twitx.nyx/includes` hay varios archivos del backend de la aplicación, dentro del archivo `config.php` podemos encontrar credenciales de la base de datos de la máquina.
+
+![dbcredentials](https://github.com/user-attachments/assets/97e4093a-f5d9-4d74-ab75-3b413389dd78)
+
+Si utilizamos estas credenciales para acceder a la base de datos encontraremos una tabla con los usuarios, y sus contraseñas en forma hash, creados en la aplicación web, uno de ellos tiene el rol de administrador.
+
+![dbaccess](https://github.com/user-attachments/assets/55c7cfc6-af0d-4fb2-b062-b1031c3ae67e)
+
+![adminHash](https://github.com/user-attachments/assets/3d89bf3f-d283-4f1b-b97c-33591dfdcaf4)
+
+Como tenemos un hash vamos a usar la herramienta [john](https://www.openwall.com/john/) que ya viene instalada por defecto en kali.
+
+![john](https://github.com/user-attachments/assets/e8bd9871-b64a-4c86-9fde-9f6a004bc838)
+
+### Escalada al usuario timer
+
+Por ahora esta contraseña va a estar asociada al usuario lenam pero no la vamos a poder usar aún. Si seguimos revisando el directorio anteriormente mencionado encontramos otro archivo llamado `taak.php` el cual ejecuta cierto comando como si fuera el usuario timer (otro usuario del sistema, podemos ver los usuarios del sistema si ejecutamos `cat /etc/passwd`). Como podemos ejecutar comandos como el usuario timer a través de este archivo vamos a insertar otra reverse shell (esta vez usando la herramienta online [RevShells](https://www.revshells.com/) que mencionamos antes. Precisamente la reverse shell de PHP de Ivan Sincek.
+
+![timeruser](https://github.com/user-attachments/assets/12dcb34b-bb75-420d-a58f-19ee81dffc73)
+
+Al añadirla al archivo `taak.php` y esperar a que se ejecute obtenemos otra reverse shell como el usuario timer. Si ejecutamos el comando `sudo -l` descubrimos que el usuario timer puede ejecutar el comando `ascii85` con sudo. Para saber como explotar esta vulnerabilidad podemos usar la página de [GTFOBins](https://gtfobins.github.io/), una página famosa con ejemplos de como explotar diferentes vulnerabilidades en binarios Unix.
+
+- [ascii85](https://gtfobins.github.io/gtfobins/ascii85/)
+
+### Escalada al usuario lenam
+
+Segun GTFOBins con `ascii85` podemos leer archivos del sistema aunque no tengamos permisos para ello. Por lo tanto, como sabemos que el puerto 22 (ssh) esta abierto podemos intentar leer la clave privada del usuario lenam a través del comando `ascii85` de la siguiente forma:
+
+```bash
+sudo /usr/bin/ascii85 "/home/lenam/.ssh/id_rsa" | ascii85 --decode
+```
+
+![sshprivatekey](https://github.com/user-attachments/assets/2d953f94-22e8-41b9-aabb-297317e3a348)
+
+Nos copiamos la clave en un archivo dentro de nuestra máquina atacante e intentamos acceder por ssh con las credenciales `lenam:patricia`.
+
+![lenamssh](https://github.com/user-attachments/assets/e2ebb848-f594-4a07-9b06-e0d15073e438)
+
+### Escalada a root
+
+Genial, ya hemos conseguido acceder como el usuario lenam. Volvemos a realizar el mismo procedimiento y revisar los archivos a los que tiene acceso el usuario lenam por si podemos escalar al usuario root. Sin irnos muy lejos encontramos en el propio directorio del usuario una ruta `/look/inside`, dentro hay un binario que tiene el [bit SUID](https://www.redhat.com/en/blog/suid-sgid-sticky-bit) activo.
+
+![unshare](https://github.com/user-attachments/assets/1d96e12e-a223-4ac0-95ff-64d66ebe529f)
+
+Volvemos a la página [GTFOBins](https://gtfobins.github.io/) y nos muestra que el binario `unshare` se utiliza para salir de entornos restringidos generando una intérprete de comandos/terminal y podemos explotarlo obteniendo una shell interactiva con privilegios de root de la siguiente forma:
+
+- [Unshare](https://gtfobins.github.io/gtfobins/unshare/)
+
+```bash
+./unshare -r /bin/sh
+```
+![root](https://github.com/user-attachments/assets/fb677aae-3e9d-4e33-8a02-e0cd22c774fa)
+
+Hemos conseguido obtener acceso a la máquina como usuario root explotando algunas vulnerabilidades tanto web como de binarios. Y con esto quedaría resuelta la máquina Twitx de la plataforma Vulnyx. Un saludo y que el hacking este con vosotros!
 
