@@ -86,5 +86,19 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 ```
 
 En principio nada interesante, la versión de ssh es más o menos reciente (última version a fecha de este commit es 9.9) y el servicio web es Apache httpd 2.4.62.
-Al acceder a la IP desde el navegador vemos la página por defecto de Apache, por lo que podemos pensar en que se esta realizando un port forwarding a otra página web que debemos descubrir. Para ello vamos a continuar con un escaneo de directorios de la página web a través de herramientas automatizadas.
+Al acceder a la IP desde el navegador vemos la página por defecto de Apache, por lo que podemos pensar en que se esta realizando un port forwarding a otra página web. Como estamos en Vulnyx, si añadimos el nombre de la máquina mas la terminación `.nyx` al archivo `/etc/hosts` podemos acceder a la página web que esta corriendo en el servidor apache.
+
+![etcHosts](https://github.com/user-attachments/assets/096e49f7-27a4-4000-8971-fe51b5a820e2)
+
+Y accedemos al dominio desde el navegador veremos la página web hosteada en el servidor.
+
+![paginaExpress](https://github.com/user-attachments/assets/ace51aa2-49e2-44fe-b44c-a3f20b7bd8d0)
+
+Un escaneo de directorios no nos reporta ningún directorio visible. Pero si revisamos el código fuente encontramos un enlace a un archivo con el código de la api del backend!! Vamos a intentar avanzar por esta vía.
+
+Ruta: `http://express.nyx/js/api.js`
+
+![apiCode](https://github.com/user-attachments/assets/96590b18-1363-437d-a2c3-f309a35807f1)
+
+Las dos primeras funciones solamente nos muestran las canciones y los géneros de canciones, pero las dos últimas si parecen tener relevancia. En primer lugar, tenemos una función que nos devolvería los usuarios que tuvieran una `key` especifica como parámetro. Y en segundo lugar tenemos una función que nos devuelve el status de una página web a través de una petición POST a lo que parece una dirección URL de admin `/api/admin/availability`. Como tenemos que empezar por algún sitio, vamos a empezar a enviar diferentes peticiones al primer endpoint para ver si obtenemos información.
 
