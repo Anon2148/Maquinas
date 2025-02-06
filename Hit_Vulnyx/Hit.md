@@ -254,3 +254,29 @@ Donde:
 Dentro de la máquina ya podemos pasar a la fase de escalada de privilegios.
 
 ## Escalada de privilegios
+
+Como somos el usuario `charlie` vamos a intentar obtener información útil de este usuario y no tardamos mucho ya que al ejecutar el comando `id` para ver en que grupos está asignado este usuario nos encontramos que está asignado al grupo `adm`, este grupo en linux tiene los permisos para leer archivos de logs del sistema, lo cual puede ser crítico ya que normalmente esos logs pueden contener información sensible del kernel o de intentos de autenticación.
+
+![idCharlie](https://github.com/user-attachments/assets/0fb88298-5138-4218-8c6d-21eef557d614)
+
+Estos archivos se suelen encontrar en la ruta `/var/log` pero si no sabemos esto de antemano siempre podemos usar el comando `find` para ver que archivos pertencen al grupo `adm` de la siguiente forma:
+
+```bash
+find / -type f -group adm 2>/dev/null
+```
+
+Al ejecutar este comando nos aparecen los siguintes archivos que podemos leer
+
+![logsCharlie](https://github.com/user-attachments/assets/9d0dadb4-1fa7-4f7f-9c91-d405c5e711de)
+
+Todos tienen bastante información útil pero sin embargo uno de ellos, `/var/log/auth.log` archivo que registra los autenticaciones, podemos observar un intento de autenticación un tanto extraño.
+
+![strangeLog](https://github.com/user-attachments/assets/c45d6985-8318-497a-8fac-4dc5676d270f)
+
+Parece ser como si alguien se hubiera intentado autenticar pero con una contraseña `r00tP4zzw0rd`. Si probamos a conectarnos por ssh como el usuario `root` usando esta cadena.
+
+![rootLogin](https://github.com/user-attachments/assets/559d4d9a-43c1-4377-b960-704384bf25f5)
+
+Boom! Conseguimos acceso como superusuario al sistema teniendo control total debido a una mala configuración de los grupos de un usuario con menos privilegios hemos conseguido obtener información valiosa que no podríamos haber conseguido sin esa mala configuración.
+
+Espero que os haya gustado y se haya entendido todo el proceso. Que el hacking este con vosotros!!!
